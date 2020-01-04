@@ -1,6 +1,8 @@
 fs = require "fs"
 
 should = require "should"
+sinon = require "sinon"
+require "should-sinon"
 clone = require "lodash/clone"
 { stringify } = JSON
 
@@ -1224,7 +1226,7 @@ describe "`#{pkg.name}@#{pkg.version}` on `node@#{process.version}`", () ->
 
 		return
 
-	describe "Issues", () ->
+	describe.only "Issues", () ->
 		describe("#151 - cannot set null", () ->
 			cache = null
 			before(() ->
@@ -1239,6 +1241,64 @@ describe "`#{pkg.name}@#{pkg.version}` on `node@#{process.version}`", () ->
 
 			it("should also return `null`", () ->
 				should(cache.get("test")).be.null()
+				return
+			)
+			return
+		)
+
+		describe("#163 - expired event is fired multiple times when deleteOnExpire is `false`", () ->
+			cache = null
+			before(() ->
+				# setup the cache with a checkperiod of 1
+				# to trigger the ttl checks each second
+				cache = new nodeCache({
+					checkperiod: 1,
+					deleteOnExpire: false,
+				})
+				return
+			)
+
+			it("set a value with a ttl of 1 second, wait 3 seconds and ensure the expired event only gets fired once", (done) ->
+				this.timeout(6000)
+
+				expiredSpy = sinon.spy()
+				
+				cache.on("expired", expiredSpy)
+
+				cache.set("hi", "bye", 1)
+
+				setTimeout(() ->
+					expiredSpy.should.be.calledOnce()
+					done()
+					return
+				, 2200)
+				return
+			)
+			return
+
+			it("set a value with a ttl of 1 second, wait 2.2 seconds, then get the value again in our expired-event handler and ensure the expired event only gets fired once", (done) ->
+				this.timeout(6000)
+
+				expiredSpy = sinon.spy()
+
+				callCount = 0
+				
+				cache.on("expired", () ->
+					expiredSpy()
+
+					# we need an exit condition here, otherwise this will result in an infinite loop (in our current, buggy implementation)
+					if callCount++ < 5
+						cache.get("foo")
+					return
+				)
+
+				cache.set("foo", "bar", 1)
+
+				setTimeout(() ->
+					expiredSpy.should.be.calledOnce()
+					done()
+					return
+				, 2200)
 				return
 			)
 			return
